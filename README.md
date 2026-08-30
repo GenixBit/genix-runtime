@@ -4,33 +4,47 @@ The official runtime infrastructure for the **Genix programming language** by **
 
 > Status: pre-alpha. Runtime ABI version: **1**.
 
-## What exists today
+## Current runtime services
 
-The runtime is now an executable part of the Genix toolchain rather than only a roadmap. Native programs produced by `genix-lang` link against this repository.
+Native programs produced by `genix-lang` link against this repository.
 
-Current ABI services include:
+Current ABI includes:
 
-- `gb_runtime_init()` / `gb_runtime_shutdown()` lifecycle hooks
-- `gb_alloc()` tracked runtime allocation
-- `gb_panic()` fatal runtime errors
-- `gb_string_concat()`
-- `gb_string_equal()`
-- `gb_print_int()`
-- `gb_print_float()`
-- `gb_print_bool()`
-- `gb_print_string()`
+- `gb_runtime_init()` / `gb_runtime_shutdown()`
+- `gb_alloc()`
+- `gb_panic()`
+- `gb_string_concat()` / `gb_string_equal()`
+- `gb_print_int()` / `gb_print_float()` / `gb_print_bool()` / `gb_print_string()`
+- `gb_input()`
+- `gb_env_get()`
+- `gb_fs_read_text()` / `gb_fs_write_text()`
+- `gb_process_exit()`
 
-The public C header is:
+Public header:
 
 ```text
 include/genix/runtime.h
 ```
 
-The portable C11 implementation is:
+Portable C11 implementation:
 
 ```text
 src/runtime.c
 ```
+
+## Standard-library host bridge
+
+The first OS-facing Genix standard-library APIs use this runtime boundary:
+
+```text
+io.input      → gb_input
+fs.read_text  → gb_fs_read_text
+fs.write_text → gb_fs_write_text
+process.env   → gb_env_get
+process.exit  → gb_process_exit
+```
+
+The Rust interpreter implements equivalent behavior for `gb run`, while native `gb build` emits the runtime calls above.
 
 ## Build and test
 
@@ -45,47 +59,43 @@ make test
 build/libgenix_runtime.a
 ```
 
-## Compiler integration
+The runtime tests cover strings, tracked allocation lifecycle, filesystem text I/O, environment lookup fallback, and typed output.
 
-The Genix compiler can locate the runtime through:
+## Compiler integration
 
 ```bash
 export GENIX_RUNTIME=/path/to/genix-runtime
 ```
 
-A native Genix build currently compiles generated C together with `src/runtime.c` and includes `include/` through the C compiler.
-
-Conceptually:
+Native build pipeline:
 
 ```text
-.gb source
+Genix source
    ↓
-Genix compiler
+Genix frontend
    ↓
-Genix IR
+Typed Genix IR
    ↓
 C11 backend
    ↓
 generated application C
    +
-genix-runtime/src/runtime.c
+Genix Runtime ABI
    ↓
 native executable
 ```
 
+The compiler validates `GENIX_RUNTIME_ABI_VERSION` before invoking the C compiler.
+
 ## Memory foundation
 
-Runtime-owned allocations are tracked and released during `gb_runtime_shutdown()`. This is a bootstrap memory model intended to prevent generated string-concatenation allocations from being permanently unmanaged while the final Genix ownership/memory-safety model is designed.
-
-This is **not yet** the final memory model for the language.
+Runtime allocations are currently tracked and released at `gb_runtime_shutdown()`. This is a bootstrap model, not the final Genix ownership or memory-safety design.
 
 ## ABI policy
 
-`GENIX_RUNTIME_ABI_VERSION` is currently `1`.
+`GENIX_RUNTIME_ABI_VERSION` is currently `1`. Because ABI v1 is still pre-alpha, additive symbols may be introduced without changing the number when existing contracts stay compatible. Breaking symbol or representation changes require an ABI increment.
 
-The ABI is still experimental. Breaking changes are allowed during pre-alpha development and must be coordinated with `genix-lang`.
-
-See `ABI.md` for the current contract.
+See `ABI.md` for the detailed contract.
 
 ## Repository layout
 
@@ -93,19 +103,20 @@ See `ABI.md` for the current contract.
 include/genix/runtime.h
 src/runtime.c
 tests/runtime_test.c
+ABI.md
 Makefile
 .github/workflows/ci.yml
 ```
 
 ## Next runtime milestones
 
-- Version compatibility checks between compiler and runtime
+- Structured I/O errors instead of fatal panic behavior
 - Stable string representation
 - Allocator abstraction and ownership model
-- File/process/platform services
-- Runtime diagnostics
-- Threads and concurrency primitives
-- Standard-library bridges
+- Path/platform abstractions
+- Time and process APIs
+- Networking primitives
+- Threads and concurrency
 - Windows/macOS/Linux portability CI
 
 ---
