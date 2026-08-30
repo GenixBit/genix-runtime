@@ -2,39 +2,111 @@
 
 The official runtime infrastructure for the **Genix programming language** by **GenixBit**.
 
-> Status: early development / pre-alpha.
+> Status: pre-alpha. Runtime ABI version: **1**.
 
-## Scope
+## What exists today
 
-This repository will provide the low-level runtime services required by compiled Genix programs, including:
+The runtime is now an executable part of the Genix toolchain rather than only a roadmap. Native programs produced by `genix-lang` link against this repository.
 
-- Program startup and shutdown
-- Memory allocation interfaces
-- Panic and fatal-error handling
-- Concurrency/runtime scheduling primitives
-- Platform abstraction
-- Environment and process integration
-- Native system calls and runtime bridges
-- Runtime support for strings, collections, and other language-level values where required
+Current ABI services include:
 
-## Design principles
+- `gb_runtime_init()` / `gb_runtime_shutdown()` lifecycle hooks
+- `gb_alloc()` tracked runtime allocation
+- `gb_panic()` fatal runtime errors
+- `gb_string_concat()`
+- `gb_string_equal()`
+- `gb_print_int()`
+- `gb_print_float()`
+- `gb_print_bool()`
+- `gb_print_string()`
 
-The runtime should remain small, predictable, portable, and easy for the compiler to target. Public runtime ABI decisions will be documented before they are considered stable.
+The public C header is:
 
-## Relationship to other repositories
+```text
+include/genix/runtime.h
+```
 
-- `genix-lang` emits code that targets runtime services.
-- `genix-stdlib` exposes higher-level APIs that may use this runtime.
-- `genix-docs` documents stable runtime behavior and language semantics.
+The portable C11 implementation is:
 
-## Initial roadmap
+```text
+src/runtime.c
+```
 
-1. Define runtime ABI boundaries.
-2. Establish platform-independent core types.
-3. Add panic/error support.
-4. Add allocator abstraction.
-5. Add threading/concurrency primitives.
-6. Integrate with the Genix compiler backend.
+## Build and test
+
+```bash
+make
+make test
+```
+
+`make` produces:
+
+```text
+build/libgenix_runtime.a
+```
+
+## Compiler integration
+
+The Genix compiler can locate the runtime through:
+
+```bash
+export GENIX_RUNTIME=/path/to/genix-runtime
+```
+
+A native Genix build currently compiles generated C together with `src/runtime.c` and includes `include/` through the C compiler.
+
+Conceptually:
+
+```text
+.gb source
+   ↓
+Genix compiler
+   ↓
+Genix IR
+   ↓
+C11 backend
+   ↓
+generated application C
+   +
+genix-runtime/src/runtime.c
+   ↓
+native executable
+```
+
+## Memory foundation
+
+Runtime-owned allocations are tracked and released during `gb_runtime_shutdown()`. This is a bootstrap memory model intended to prevent generated string-concatenation allocations from being permanently unmanaged while the final Genix ownership/memory-safety model is designed.
+
+This is **not yet** the final memory model for the language.
+
+## ABI policy
+
+`GENIX_RUNTIME_ABI_VERSION` is currently `1`.
+
+The ABI is still experimental. Breaking changes are allowed during pre-alpha development and must be coordinated with `genix-lang`.
+
+See `ABI.md` for the current contract.
+
+## Repository layout
+
+```text
+include/genix/runtime.h
+src/runtime.c
+tests/runtime_test.c
+Makefile
+.github/workflows/ci.yml
+```
+
+## Next runtime milestones
+
+- Version compatibility checks between compiler and runtime
+- Stable string representation
+- Allocator abstraction and ownership model
+- File/process/platform services
+- Runtime diagnostics
+- Threads and concurrency primitives
+- Standard-library bridges
+- Windows/macOS/Linux portability CI
 
 ---
 
