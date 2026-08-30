@@ -25,6 +25,13 @@ void gb_print_float(double value);
 void gb_print_bool(bool value);
 void gb_print_string(const char* value);
 
+/* Host-service APIs used by compiler-recognized standard-library intrinsics. */
+char* gb_input(const char* prompt);
+char* gb_env_get(const char* name);
+char* gb_fs_read_text(const char* path);
+void gb_fs_write_text(const char* path, const char* text);
+_Noreturn void gb_process_exit(int64_t code);
+
 #ifdef __cplusplus
 }
 #endif
