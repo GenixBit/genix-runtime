@@ -8,7 +8,7 @@ This document defines the current pre-alpha ABI contract between generated Genix
 #define GENIX_RUNTIME_ABI_VERSION 1
 ```
 
-The ABI is experimental until Genix reaches a stable language/runtime release.
+ABI v1 is still pre-alpha. New symbols may be added without changing the ABI number when existing signatures and representations remain compatible. Breaking changes to existing ABI contracts must increment the version.
 
 ## Lifecycle
 
@@ -17,48 +17,29 @@ void gb_runtime_init(void);
 void gb_runtime_shutdown(void);
 ```
 
-Generated executables call `gb_runtime_init()` before the Genix `main` function and `gb_runtime_shutdown()` after it returns.
+Generated executables initialize the runtime before Genix `main` and shut it down after `main` returns.
 
-Both functions are safe for the current single-process bootstrap runtime. Shutdown releases allocations tracked by `gb_alloc()`.
-
-## Allocation
+## Allocation and panic
 
 ```c
 void* gb_alloc(size_t size);
-```
-
-`gb_alloc` returns runtime-managed storage. Allocation failure terminates through `gb_panic`.
-
-The v1 runtime tracks allocations until shutdown. Individual deallocation is not exposed yet because the final Genix ownership model has not been finalized.
-
-## Panic
-
-```c
 _Noreturn void gb_panic(const char* message);
 ```
 
-`gb_panic` writes a Genix runtime panic message to standard error, performs runtime shutdown, and exits with status code `70`.
+The bootstrap allocator tracks allocations until runtime shutdown. Individual deallocation is intentionally not public until the Genix ownership model is finalized.
 
 ## Strings
 
-The current native ABI represents a Genix string as a UTF-8-compatible null-terminated C string pointer:
-
-```c
-const char*
-```
-
-This representation is temporary and may change when the stable Genix string/ownership model is introduced.
-
-Runtime functions:
+The current bootstrap native ABI represents strings as null-terminated UTF-8-compatible C string pointers.
 
 ```c
 char* gb_string_concat(const char* left, const char* right);
 bool gb_string_equal(const char* left, const char* right);
 ```
 
-Concatenated strings are allocated through `gb_alloc` and are released by runtime shutdown.
+The representation is temporary and may change in a future breaking ABI revision.
 
-## Output
+## Typed output
 
 ```c
 void gb_print_int(int64_t value);
@@ -67,7 +48,58 @@ void gb_print_bool(bool value);
 void gb_print_string(const char* value);
 ```
 
-These functions define the first portable output boundary used by Genix's `print(...)` operation in native builds.
+These functions back native Genix `print(...)` and the first `io` standard-library APIs.
+
+## Host services
+
+ABI v1 now includes additive host-service functions used by the bootstrap standard-library intrinsic boundary.
+
+### Standard input
+
+```c
+char* gb_input(const char* prompt);
+```
+
+Writes the optional prompt, reads one line from standard input, strips the line ending, and returns a runtime-managed string.
+
+### Environment
+
+```c
+char* gb_env_get(const char* name);
+```
+
+Returns a runtime-managed copy of the environment-variable value. A missing variable currently returns an empty string because Genix does not yet have `Option`/nullable result types.
+
+### Filesystem text I/O
+
+```c
+char* gb_fs_read_text(const char* path);
+void gb_fs_write_text(const char* path, const char* text);
+```
+
+`gb_fs_read_text` returns runtime-managed text. Bootstrap file failures terminate through `gb_panic`; structured `Result`-based I/O is planned after language error types are implemented.
+
+### Process control
+
+```c
+_Noreturn void gb_process_exit(int64_t code);
+```
+
+Performs runtime shutdown and terminates the process with the supplied exit status.
+
+## Standard-library mapping
+
+The current native compiler lowers these official Genix APIs directly to runtime symbols:
+
+| Genix API | Runtime ABI |
+|---|---|
+| `io.input(prompt)` | `gb_input` |
+| `fs.read_text(path)` | `gb_fs_read_text` |
+| `fs.write_text(path, text)` | `gb_fs_write_text` |
+| `process.env(name)` | `gb_env_get` |
+| `process.exit(code)` | `gb_process_exit` |
+
+This is a bootstrap compiler/runtime boundary, not the final general-purpose FFI design.
 
 ## Primitive ABI mapping
 
@@ -79,14 +111,13 @@ These functions define the first portable output boundary used by Genix's `print
 | `string` | `const char*` |
 | void | `void` |
 
-## Stability rules
+## Compatibility rules
 
-During pre-alpha development:
-
-- ABI changes may be breaking.
-- `genix-lang` and `genix-runtime` must be updated together when the ABI changes.
-- Changes to public symbols should increment `GENIX_RUNTIME_ABI_VERSION` when compatibility is broken.
-- Compiler CI should build and execute native programs against the current runtime repository.
+- `genix-lang` validates `GENIX_RUNTIME_ABI_VERSION` before native compilation.
+- `genix-stdlib/COMPATIBILITY` declares the runtime ABI it expects.
+- Adding new symbols is allowed during the pre-alpha ABI v1 period when existing contracts remain compatible.
+- Changing/removing existing symbols or representations requires an ABI version increment.
+- Cross-repository CI builds and executes programs against the current compiler, runtime, and standard library.
 
 ---
 
